@@ -1,0 +1,57 @@
+---
+- name: Install Promtail (Ubuntu 24.04)
+  hosts: all
+  become: true
+  tasks:
+    - name: Install APT dependency packages
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - software-properties-common
+          - wget
+          - gnupg
+        state: present
+        update_cache: true
+
+    - name: Ensure /etc/apt/keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Grafana GPG key
+      ansible.builtin.get_url:
+        url: https://apt.grafana.com/gpg.key
+        dest: /tmp/grafana.gpg
+        mode: '0644'
+
+    - name: Convert and store Grafana GPG key in /etc/apt/keyrings
+      ansible.builtin.shell: |
+        gpg --dearmor < /tmp/grafana.gpg > /etc/apt/keyrings/grafana.gpg
+      args:
+        creates: /etc/apt/keyrings/grafana.gpg
+
+    - name: Set correct permissions for Grafana GPG key
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/grafana.gpg
+        mode: '0644'
+
+    - name: Remove temporary GPG key file
+      ansible.builtin.file:
+        path: /tmp/grafana.gpg
+        state: absent
+
+    - name: Add Grafana APT repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main"
+        state: present
+        filename: grafana
+
+    - name: Update package list
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Install Promtail
+      ansible.builtin.apt:
+        name: promtail
+        state: present

@@ -1,0 +1,43 @@
+---
+- name: Grafana mimir
+  hosts: all
+  become: true
+  become_user: root
+
+  tasks:
+  - name: Install dependencies with apt packages
+    ansible.builtin.apt:
+      name:
+        - apt-transport-https
+        - software-properties-common
+        - wget
+      state: present
+      update_cache: true
+
+  - name: Ensure /etc/apt/keyrings directory exists
+    ansible.builtin.file:
+      path: /etc/apt/keyrings
+      state: directory
+      mode: '0755'
+
+  - name: Download and add Grafana GPG key
+    ansible.builtin.get_url:
+      url: https://apt.grafana.com/gpg.key
+      dest: /etc/apt/keyrings/grafana.gpg
+      mode: '0644'
+
+  - name: Add Grafana repository
+    ansible.builtin.lineinfile:
+      path: /etc/apt/sources.list.d/grafana.list
+      line: "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main"
+      mode: '0644'
+      create: true
+
+  - name: Update apt cache
+    ansible.builtin.apt:
+      update_cache: true
+
+  - name: Install mimir
+    ansible.builtin.apt:
+      name: mimir
+      state: present

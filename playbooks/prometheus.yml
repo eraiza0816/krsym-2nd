@@ -1,0 +1,23 @@
+---
+- name: Install and configure Prometheus
+  hosts: all
+  become: true
+  tasks:
+    - name: Install Prometheus using prometheus.prometheus collection
+      ansible.builtin.include_role:
+        name: prometheus.prometheus.prometheus
+
+    - name: Copy Prometheus configuration file
+      ansible.builtin.copy:
+        src: files/prometheus/prometheus.yml.raw
+        dest: /etc/prometheus/prometheus.yml
+        owner: prometheus
+        group: prometheus
+        mode: '0644'
+      notify: Restart Prometheus
+
+  handlers:
+    - name: Restart Prometheus
+      ansible.builtin.service:
+        name: prometheus
+        state: restarted

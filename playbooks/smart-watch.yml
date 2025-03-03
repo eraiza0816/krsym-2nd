@@ -1,0 +1,123 @@
+---
+- name: Deploy SMART Watch Monitoring
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Install required packages
+      ansible.builtin.package:
+        name:
+          - smartmontools
+          - curl
+        state: present
+
+    - name: Create SMART Watch script
+      ansible.builtin.copy:
+        dest: /usr/local/bin/smart-watch.sh
+        content: |
+          #!/bin/bash
+          WEBHOOK_URL="https://discord.com/api/webhooks/your_webhook_url"
+          HOSTNAME=$(hostname)
+          IP_ADDRESS=$(hostname -I | tr ' ' '\n' | grep '^192\.168' | head -n 1)
+
+          function check_smart_status() {
+              local all_disks=""
+              for disk in $(lsblk -dn -o NAME | grep -E '^[a-z]+' | xargs -I{} echo /dev/{}); do
+                  smartctl_output=$(smartctl -H "$disk" 2>/dev/null)
+                  if echo "$smartctl_output" | grep -q "FAILED!"; then
+                      alert_message=$(echo "$smartctl_output" | grep -E "SMART overall-health self-assessment test result")
+                      send_alert "$disk" "$alert_message"
+                  fi
+                  health=$(echo "$smartctl_output" | grep -E "SMART overall-health self-assessment test result")
+                  all_disks+="\n$disk: $health"
+              done
+              send_initial_report "$all_disks"
+          }
+
+          function send_alert() {
+              local disk="$1"
+              local alert_message="$2"
+              payload=$(cat <<EOF
+          {
+              "content": "SMARTエラーが検出されました。",
+              "embeds": [
+                  {
+                      "title": "SMART異常検出",
+                      "color": 16711680,
+                      "fields": [
+                          {"name": "ホスト名", "value": "$HOSTNAME"},
+                          {"name": "IPアドレス", "value": "$IP_ADDRESS"},
+                          {"name": "ディスク", "value": "$disk"},
+                          {"name": "故障内容", "value": "$alert_message"}
+                      ]
+                  }
+              ]
+          }
+          EOF
+              )
+              curl -s -X POST -H "Content-Type: application/json" -d "$payload" "$WEBHOOK_URL" >/dev/null
+          }
+
+          function send_initial_report() {
+              local all_disks="$1"
+              payload=$(cat <<EOF
+          {
+              "content": "SMART監視スクリプトが実行されました。",
+              "embeds": [
+                  {
+                      "title": "SMART監視レポート",
+                      "color": 65280,
+                      "fields": [
+                          {"name": "ホスト名", "value": "$HOSTNAME"},
+                          {"name": "IPアドレス", "value": "$IP_ADDRESS"},
+                          {"name": "ディスク状況", "value": "```\n$all_disks\n```"}
+                      ]
+                  }
+              ]
+          }
+          EOF
+              )
+              curl -s -X POST -H "Content-Type: application/json" -d "$payload" "$WEBHOOK_URL" >/dev/null
+          }
+
+          check_smart_status
+        mode: '0755'
+
+    - name: Create systemd service file
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/smart-watch.service
+        content: |
+          [Unit]
+          Description=SMART Watch Service
+          After=network.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/bash /usr/local/bin/smart-watch.sh
+        mode: '0644'
+
+    - name: Create systemd timer file
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/smart-watch.timer
+        content: |
+          [Unit]
+          Description=SMART Watch Timer
+
+          [Timer]
+          OnBootSec=1min
+          OnUnitActiveSec=1h
+          Unit=smart-watch.service
+
+          [Install]
+          WantedBy=timers.target
+        mode: '0644'
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Enable and start smart-watch.timer
+      ansible.builtin.systemd:
+        name: smart-watch.timer
+        enabled: true
+        state: started

@@ -1,0 +1,36 @@
+all:
+  children:
+    physical:
+      hosts:
+        krs-n950:
+          ansible_host: 192.168.200.111
+        nextcloud:
+          ansible_host: 192.168.200.225
+    lxc:
+      hosts:
+        n3-util:
+          ansible_host: 192.168.200.19
+        mstdn-prd:
+          ansible_host: 192.168.200.45
+        docker-compose:
+          ansible_host: 192.168.200.103
+        es:
+          ansible_host: 192.168.200.104
+        tailscale:
+          ansible_host: 192.168.200.105
+        rec:
+          ansible_host: 192.168.200.109
+        krs2-wg:
+          ansible_host: 192.168.200.112
+        adguard:
+          ansible_host: 192.168.200.113
+        growi:
+          ansible_host: 192.168.200.122
+        wikijs:
+          ansible_host: 192.168.200.124
+        collecter:
+          ansible_host: 192.168.200.125
+        cowrie:
+          ansible_host: 192.168.200.127
+        gh-runner:
+          ansible_host: 192.168.200.128

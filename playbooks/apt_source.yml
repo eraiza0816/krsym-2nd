@@ -1,0 +1,21 @@
+---
+- name: Update Apt and Apply Custom sources.list
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Copy new sources.list
+      ansible.builtin.copy:
+        src: files/sources.list
+        dest: /etc/apt/sources.list
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Update apt cache
+
+  handlers:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: "dist"
+        cache_valid_time: 3600

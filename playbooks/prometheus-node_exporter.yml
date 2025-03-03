@@ -1,0 +1,70 @@
+- name: Install and update Prometheus Node Exporter
+  hosts: all
+  become: true
+  vars:
+    assets_version: "1.9.0"
+    node_exporter_bin: "/usr/bin/prometheus-node-exporter"
+  tasks:
+    - name: Update apt repository
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - prometheus-node-exporter
+          - curl
+        state: present
+
+    - name: Download Prometheus Node Exporter binary
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ assets_version }}/node_exporter-{{ assets_version }}.linux-amd64.tar.gz"
+        dest: "/tmp/node_exporter-{{ assets_version }}.linux-amd64.tar.gz"
+        mode: '0644'
+
+    - name: Extract Node Exporter archive
+      ansible.builtin.unarchive:
+        src: "/tmp/node_exporter-{{ assets_version }}.linux-amd64.tar.gz"
+        dest: "/tmp"
+        remote_src: true
+
+    - name: Stop Prometheus Node Exporter service
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter
+        state: stopped
+        enabled: true
+
+    - name: Backup existing Prometheus Node Exporter binary
+      ansible.builtin.command:
+        cmd: mv {{ node_exporter_bin }} {{ node_exporter_bin }}.bak
+      register: backup_result
+      changed_when: backup_result.rc == 0
+      failed_when: backup_result.rc not in [0, 1]
+
+    - name: Replace Node Exporter binary
+      ansible.builtin.copy:
+        src: "/tmp/node_exporter-{{ assets_version }}.linux-amd64/node_exporter"
+        dest: "{{ node_exporter_bin }}"
+        mode: '0755'
+        remote_src: true
+
+    - name: Cleanup temporary files
+      ansible.builtin.file:
+        path: "/tmp/node_exporter-{{ assets_version }}.linux-amd64.tar.gz"
+        state: absent
+
+    - name: Start Prometheus Node Exporter service
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter
+        state: started
+        enabled: true
+
+    - name: Check Prometheus Node Exporter service status
+      ansible.builtin.command:
+        cmd: systemctl status prometheus-node-exporter
+      register: service_status
+      changed_when: false
+
+    - name: Display service status
+      ansible.builtin.debug:
+        msg: "{{ service_status.stdout_lines }}"

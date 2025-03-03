@@ -1,0 +1,9 @@
+.vscode
+*.raw
+terraform/.terraform
+terraform/terraform.tfvars
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfstate.backup.*
+app-util
+certs/vault_password
