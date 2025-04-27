@@ -30,7 +30,7 @@ all:
           ansible_host: 192.168.200.124
         collecter:
           ansible_host: 192.168.200.125
-        cowrie:
+        mikopbx:
           ansible_host: 192.168.200.127
         gh-runner:
           ansible_host: 192.168.200.128
