@@ -1,0 +1,82 @@
+## 1. このリポジトリの用途
+
+このリポジトリは、Infrastructure as Code (IaC) の原則に基づき、サーバーやコンテナなどのインフラストラクチャの構成管理、プロビジョニング、および関連タスクの自動化を行うことを目的としています。主に以下の技術スタックを利用しています。
+
+*   Ansible: サーバーの構成管理、ミドルウェアのセットアップ、アプリケーションのデプロイ、定期的なタスクの実行など。(`playbooks/`, `inventries/`, `role/` ディレクトリを参照)
+*   Terraform: クラウドプロバイダーや仮想化環境 (Proxmoxなど) 上のリソース（仮想マシン、ネットワークなど）のプロビジョニングと管理。(`terraform/` ディレクトリを参照)
+
+## 2. 使用しているミドルウェアコンポーネント
+
+このリポジトリで中心的に使用されているIaCツール（ミドルウェア）は以下の通りです。
+
+*   Ansible: エージェントレスの構成管理・自動化ツール。YAML形式でPlaybookやRoleを記述します。機密情報の暗号化はansible-vaultで行います。
+*   Terraform: HCL (HashiCorp Configuration Language) を使用してインフラリソースを定義・管理するツール。
+
+## 3. コーディングルール
+
+あなたがCline又はRooの場合は，このリポジトリ内のコードを編集・生成する際は、以下のルールに従ってください。
+
+### 3.1. Ansible
+
+*   言語: Playbook、Role、変数ファイルなどはYAML形式で記述します。インデントはスペース2つを基本とします。
+*   構成:
+    *   再利用可能な処理は `role/` ディレクトリ内にRoleとして実装します。
+    *   Playbook (`playbooks/`内) は、Roleの呼び出しや特定のワークフローの定義に留め、ロジックを直接記述しすぎないようにします。
+    *   インベントリファイル (`inventries/`内) は、環境や役割に応じて適切にグループ化します。
+    *   インベントリ変数 (`inventries/group_vars/all.yml`, `inventries/group_vars/<group_name>.yml`, `inventries/host_vars/<hostname>.yml`) を活用し、環境やホスト固有の設定を分離します。
+    *   共通のハンドラーはルートの `handlers/` ディレクトリに配置する構成も可能です (例: `handlers/main.yml`)。
+    *   外部の Ansible Role や Collection への依存関係は、ルートディレクトリの `requirements.yml` ファイルで管理することを推奨します。
+*   命名規則:
+    *   Play、Task、Role、変数名、タグ名などは、内容が分かりやすい英語の `snake_case` (例: `install_package`, `web_server_port`, `apply_config`) を使用します。
+    *   Boolean型の変数名は `is_` や `has_` で始めることを推奨します (例: `is_production`, `has_ssl_cert`)。
+*   ベストプラクティス:
+    *   可能な限り冪等性を保つようにTaskを記述します。Ansibleの標準モジュールは通常冪等ですが、`command`や`shell`モジュールを使用する際は特に注意が必要です。
+    *   サービスの再起動などは `handlers` を使用します。
+    *   機密情報の取り扱い:
+        *   機密情報（パスワード、APIキーなど）の平文は `.raw` 拡張子のファイルで管理されることがあります。これらの `.raw` ファイルはClineやRooが決して編集・作成・削除してはいけません。
+        *   機密情報はAnsible Vault (`keys/` 内の `.enc` ファイルなど) を使用して暗号化します。これらの `.enc` ファイルはClineやRooが決して削除してはいけません。
+        *   Vaultファイルの編集が必要な場合は、ユーザーに復号・編集・再暗号化を依頼してください。ClineやRooは暗号化された `.enc` ファイルの内容を直接編集しません。
+    *   変数定義は、優先順位 (例: インベントリ変数 > Playbook 変数 > Role 変数 > Role デフォルト値) を意識し、Roleの `defaults/main.yml` (デフォルト値)、`vars/main.yml` (Role内部変数)、Playbookの `vars` セクション、インベントリ変数などを適切に使い分けます。
+    *   Playbook や Task に `tags` を適切に付与し、`ansible-playbook --tags` や `--skip-tags` オプションで実行対象を絞り込めるようにすることを推奨します。
+    *   `ansible-lint` や `yamllint` などのリンターを導入し、設定ファイル (`.ansible-lint`, `.yamllint`) をリポジトリに含めてコード品質を維持することを強く推奨します。CI/CD パイプラインでのチェックも有効です。
+*   コメント: 各Play、Task、Role、変数などの目的や複雑な処理について、適宜コメントを追加します。
+
+### 3.2. Terraform
+
+*   言語: HCL (HashiCorp Configuration Language) で記述します。
+*   フォーマット: コードは `terraform fmt` コマンドでフォーマットされている状態を維持します。
+*   構成:
+    *   再利用可能なリソース群はModuleとして定義することを検討します (現時点では `terraform/` 直下に記述されていますが、将来的なモジュール化も考慮)。
+    *   ルートモジュール (`terraform/` 直下) では、主にリソース定義、Module呼び出し、Variable定義、Output定義を行います。
+*   命名規則:
+    *   Resource、Data Source、Variable、Output名は、内容が分かりやすい英語の `snake_case` (例: `virtual_machine`, `public_ip_address`) を使用します。
+*   ベストプラクティス:
+    *   変数は `variables.tf` に定義し、型 (`type`) や説明 (`description`)、必要に応じてデフォルト値 (`default`) を指定します。機密性の高い変数は `sensitive = true` を設定します。
+    *   環境固有の値（例: IPアドレス範囲、インスタンスサイズ）は、`.tfvars` ファイルで管理することを推奨します (リポジトリには含めない場合もあります)。
+    *   他のリソースやModuleから参照される値は `outputs.tf` で定義します。
+    *   可能な限りハードコーディングを避け、変数やData Sourceを使用します。
+    *   Terraform Stateファイル (`terraform.tfstate`) は、通常リポジトリに含めず、リモートバックエンド (S3など) で管理することが推奨されますが、このリポジトリではローカルに存在しています。Stateファイルの直接編集は原則行いません。
+    *   `tflint` などのリンターでチェックすることを推奨します。
+*   コメント: 各Resource、Variable、Outputの目的や複雑な設定について、適宜コメント (`#` または `//`) を追加します。
+
+## 4. 操作ルール
+
+ClineとRooがこのリポジトリで作業を行う際の具体的な操作ルールは以下の通りです。
+
+### 4.1. Terraform
+
+*   計画の確認: Terraformコードを編集した後、`cd terraform && terraform plan` を実行して構文エラーや意図しない変更がないか確認してください。
+*   エラー修正: `terraform plan` でエラーが検出された場合は、エラーメッセージに基づいてコードを修正してください。
+*   適用 (Apply): `terraform apply` の実行は原則としてユーザーが行います。ClineやRooが `apply` は実行できません。
+
+### 4.2. Ansible
+
+*   Lintチェック: PlaybookやRoleを編集した後、リポジトリルートで `ansible-lint .` や `yamllint .` を実行して、記述がベストプラクティスや構文ルールに沿っているか確認してください (設定ファイルが存在する場合)。
+*   Dry Run: 変更を適用する前に、可能であれば `--check` (ドライラン) および `--diff` オプション付きで `ansible-playbook` を実行し、どのような変更が行われるかを詳細に確認することを推奨します。実行はユーザーに依頼するか、承認を得てから行ってください。
+*   実行: Playbookの実行 (`ansible-playbook`) は原則としてユーザーが行います。ClineやRooが実行する必要がある場合は、必ずユーザーの承認を得てください。実行時には `--tags` や `--skip-tags` を活用して対象を絞ることも検討してください。
+
+## 5. 重要注意事項
+
+*   `keys/` ディレクトリの取り扱い: このディレクトリにはAnsible VaultのパスワードファイルやSSH秘密鍵などの機密情報が含まれています。ClineやRooは、いかなる理由があっても `keys/` ディレクトリ内のファイルの読み込み、書き込み、作成、削除を行ってはいけません。
+
+これらのルールは、リポジトリの保守性、可読性、一貫性を保つために重要です。ClineとRooはこれらのルールを理解し、遵守するよう努めてください。
