@@ -2,7 +2,7 @@
   hosts: all
   become: true
   vars:
-    assets_version: "1.9.0"
+    assets_version: "1.9.1"
     node_exporter_bin: "/usr/bin/prometheus-node-exporter"
   tasks:
     - name: Update apt repository
